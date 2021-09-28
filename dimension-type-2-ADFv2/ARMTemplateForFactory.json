@@ -1,0 +1,278 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "dimension-type-2-ADFv2"
+		},
+		"AzureSqlDatabase1_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'AzureSqlDatabase1'"
+		},
+		"SALESDIMENSIONLINKEDSERVICE_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'SALESDIMENSIONLINKEDSERVICE'"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/SCDTYPE2PIPELINE')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Data flow1",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "1.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "dataflow1",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"SALESREPSTG": {},
+									"DIMENSIONSALES": {},
+									"MAXKEY": {},
+									"sink1": {},
+									"sink2": {},
+									"sink3": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/dataflow1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/dataflow1')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SalesRepSTGset",
+								"type": "DatasetReference"
+							},
+							"name": "SALESREPSTG"
+						},
+						{
+							"dataset": {
+								"referenceName": "SALESDIMENSIONSET",
+								"type": "DatasetReference"
+							},
+							"name": "DIMENSIONSALES"
+						},
+						{
+							"dataset": {
+								"referenceName": "SALESDIMENSIONSET",
+								"type": "DatasetReference"
+							},
+							"name": "MAXKEY"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SALESDIMENSIONSET",
+								"type": "DatasetReference"
+							},
+							"name": "sink1"
+						},
+						{
+							"dataset": {
+								"referenceName": "SALESDIMENSIONSET",
+								"type": "DatasetReference"
+							},
+							"name": "sink2"
+						},
+						{
+							"dataset": {
+								"referenceName": "SALESDIMENSIONSET",
+								"type": "DatasetReference"
+							},
+							"name": "sink3"
+						}
+					],
+					"transformations": [
+						{
+							"name": "Select1"
+						},
+						{
+							"name": "Join1"
+						},
+						{
+							"name": "LookupExistingRecords"
+						},
+						{
+							"name": "ConditionalSplit1"
+						},
+						{
+							"name": "DerivedColumn1"
+						},
+						{
+							"name": "AlterRow1"
+						},
+						{
+							"name": "DerivedColumn2"
+						},
+						{
+							"name": "DerivedColumn3"
+						},
+						{
+							"name": "Filter1"
+						},
+						{
+							"name": "AlterRow2"
+						}
+					],
+					"script": "source(output(\n\t\tSalesRep_Number as integer,\n\t\tSalesRep_Name as string,\n\t\tSalesRep_Department as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> SALESREPSTG\nsource(output(\n\t\tSalesRep_Key as integer,\n\t\tSalesRep_Number as integer,\n\t\tSalesRep_Name as string,\n\t\tSalesRep_Department as string,\n\t\tCurrent_Flag as integer,\n\t\tVerifyField as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> DIMENSIONSALES\nsource(output(\n\t\tSalesRep_Key as integer,\n\t\tSalesRep_Number as integer,\n\t\tSalesRep_Name as string,\n\t\tSalesRep_Department as string,\n\t\tCurrent_Flag as integer,\n\t\tVerifyField as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'select max(isNull(SalesRep_Key,0)) as MAXKEY from dbo.Dim_SalesRep',\n\tformat: 'query') ~> MAXKEY\nDIMENSIONSALES select(mapColumn(\n\t\tDIMSalesRep_Key = SalesRep_Key,\n\t\tDIMSalesRep_Number = SalesRep_Number,\n\t\tDIMSalesRep_Name = SalesRep_Name,\n\t\tDIMSalesRep_Department = SalesRep_Department,\n\t\tDIMCurrent_Flag = Current_Flag,\n\t\tDIMVerifyField = VerifyField\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> Select1\nSALESREPSTG, MAXKEY join(true(),\n\tjoinType:'cross',\n\tbroadcast: 'auto')~> Join1\nJoin1, Select1 lookup(SALESREPSTG@SalesRep_Number == DIMSalesRep_Number,\n\tmultiple: true,\n\tbroadcast: 'auto')~> LookupExistingRecords\nLookupExistingRecords split(isNull(DIMSalesRep_Number),\n\ttrue(),\n\tdisjoint: false) ~> ConditionalSplit1@(NEW, EXISTING2, EXISTING)\nConditionalSplit1@NEW derive(Current_Flag = 1) ~> DerivedColumn1\nDerivedColumn1 alterRow(insertIf(true())) ~> AlterRow1\nConditionalSplit1@EXISTING derive(NCurrent_Flag = 1,\n\t\tVerifiedField = 'New') ~> DerivedColumn2\nConditionalSplit1@EXISTING2 derive(uCurrent_Flag = 0) ~> DerivedColumn3\nDerivedColumn3 filter(DIMSalesRep_Key <= SalesRep_Key) ~> Filter1\nFilter1 alterRow(updateIf(DIMSalesRep_Key <= SalesRep_Key)) ~> AlterRow2\nAlterRow1 sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tinput(\n\t\tSalesRep_Key as integer,\n\t\tSalesRep_Number as integer,\n\t\tSalesRep_Name as string,\n\t\tSalesRep_Department as string,\n\t\tCurrent_Flag as integer,\n\t\tVerifyField as string\n\t),\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true,\n\tsaveOrder: 1,\n\terrorHandlingOption: 'stopOnFirstError',\n\tmapColumn(\n\t\tSalesRep_Key,\n\t\tSalesRep_Number = DIMSalesRep_Number,\n\t\tSalesRep_Name = DIMSalesRep_Name,\n\t\tSalesRep_Department = DIMSalesRep_Department,\n\t\tCurrent_Flag = DIMCurrent_Flag,\n\t\tVerifyField = DIMVerifyField\n\t)) ~> sink1\nDerivedColumn2 sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tinput(\n\t\tSalesRep_Key as integer,\n\t\tSalesRep_Number as integer,\n\t\tSalesRep_Name as string,\n\t\tSalesRep_Department as string,\n\t\tCurrent_Flag as integer,\n\t\tVerifyField as string\n\t),\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true,\n\terrorHandlingOption: 'stopOnFirstError',\n\tmapColumn(\n\t\tSalesRep_Key,\n\t\tSalesRep_Number = DIMSalesRep_Number,\n\t\tSalesRep_Name = DIMSalesRep_Name,\n\t\tSalesRep_Department = DIMSalesRep_Department,\n\t\tCurrent_Flag = NCurrent_Flag,\n\t\tVerifyField\n\t)) ~> sink2\nAlterRow2 sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tinput(\n\t\tSalesRep_Key as integer,\n\t\tSalesRep_Number as integer,\n\t\tSalesRep_Name as string,\n\t\tSalesRep_Department as string,\n\t\tCurrent_Flag as integer,\n\t\tVerifyField as string\n\t),\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['SalesRep_Key'],\n\tformat: 'table',\n\tpreSQLs:['SET IDENTITY_INSERT dbo.Dim_SalesRep ON;'],\n\tpostSQLs:['SET IDENTITY_INSERT dbo.Dim_SalesRep OFF;'],\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true,\n\terrorHandlingOption: 'stopOnFirstError') ~> sink3"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SalesRepSTGset')]",
+				"[concat(variables('factoryId'), '/datasets/SALESDIMENSIONSET')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/AzureSqlDatabase1')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"connectionString": "[parameters('AzureSqlDatabase1_connectionString')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SalesRepSTGset')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "AzureSqlDatabase1",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "SalesRep_Number",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "SalesRep_Name",
+						"type": "varchar"
+					},
+					{
+						"name": "SalesRep_Department",
+						"type": "varchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "dbo",
+					"table": "STG_Sales_Rep"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/AzureSqlDatabase1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SALESDIMENSIONLINKEDSERVICE')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"connectionString": "[parameters('SALESDIMENSIONLINKEDSERVICE_connectionString')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SALESDIMENSIONSET')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SALESDIMENSIONLINKEDSERVICE",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "SalesRep_Key",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "SalesRep_Number",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "SalesRep_Name",
+						"type": "varchar"
+					},
+					{
+						"name": "SalesRep_Department",
+						"type": "varchar"
+					},
+					{
+						"name": "Current_Flag",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "VerifyField",
+						"type": "varchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "dbo",
+					"table": "Dim_SalesRep"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/SALESDIMENSIONLINKEDSERVICE')]"
+			]
+		}
+	]
+}
